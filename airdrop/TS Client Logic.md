@@ -1,0 +1,1 @@
+I think Solana prefers typescript mainly because it is easier for web2 devs transitioning into web3 to pick up Solana right away. Plus Typescript provides type safety which is crucial when dealing with blockchains. And the already existing ecosystem ensures important dev tools are already available.
