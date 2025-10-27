@@ -1,0 +1,12 @@
+[package]
+name = "airdrop2"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+bs58 = "0.5.1"
+solana-client = "3.0.3"
+solana-sdk = "3.0.0"
+serde_json = "1.0"
+solana-program = "3.0.0"
+solana-system-interface = "2.0.0"
