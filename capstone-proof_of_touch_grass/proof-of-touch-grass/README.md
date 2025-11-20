@@ -1,4 +1,160 @@
-# Proof of Touch Grass - Instruction Flow Diagram
+# Proof of Touch Grass
+
+A Solana program that uses financial stakes and social accountability to help you actually complete your goals. Put money on the line, submit evidence, get verified by people you trust.
+
+## Why this works
+
+When you stake actual money on a commitment, suddenly that morning run or daily reading habit feels a lot more urgent. Add verifiers who can call out your BS, and you've got a system that's harder to beat than your average todo list.
+
+The psychology is simple - losing money hurts more than the satisfaction of skipping a workout. And knowing someone's going to review your evidence keeps you honest.
+
+## How it flows
+
+```mermaid
+---
+config:
+  theme: redux-dark
+---
+stateDiagram-v2
+  direction TB
+  [*] --> Created:create_challenge() locks stake + fee
+  Created --> Active:update_challenge_state() when start_time reached
+  Created --> Cancelled:cancel_challenge() full refund
+  Active --> PendingVerification:submit_evidence() all evidence submitted
+  Active --> Failed:update_challenge_state() end_time reached incomplete evidence
+  Active --> Cancelled:cancel_challenge() 98% refund 2% penalty
+  PendingVerification --> Completed:verify_evidence() approval threshold met immediately
+  PendingVerification --> Failed:verify_evidence() rejection threshold met immediately
+  PendingVerification --> Completed:update_challenge_state() timeout defaults to creator
+  Completed --> Disputed:dispute_verification() within dispute window
+  Failed --> Disputed:dispute_verification() within dispute window
+  Completed --> [*]:claim_funds() creator gets stake + 0.25% bonus platform 0.25%
+  Failed --> [*]:claim_funds() rejecting verifiers split 25% slash creator 75% refund platform 0.5%
+  Cancelled --> [*]:Refunded immediately
+  Disputed --> [*]:Manual resolution out of scope
+  note right of Created
+  Initial state after challenge creation
+        Stake + 0.5% fee locked
+        Verifiers assigned (max 5)
+        Waiting for start_time
+  end note
+  note right of Active
+  Challenge is live
+        Creator submits evidence (IPFS hashes)
+        Timer running until end_time
+        Needs all required_proofs
+  end note
+  note right of PendingVerification
+  All evidence submitted awaiting votes
+        Verifiers vote approve or reject
+        Auto-finalizes when threshold met
+        Timeout defaults to Completed
+        Philosophy: Innocent until proven guilty
+  end note
+  note right of Completed
+  Challenge succeeded
+        Funds locked for dispute window
+        Creator gets stake + 0.25% bonus
+        Platform gets 0.25% (half of fee)
+        Verifiers get nothing
+  end note
+  note right of Failed
+  Challenge failed
+        Funds locked for dispute window
+        ONLY verifiers who voted REJECT can claim
+        They split 25% of the stake
+        Creator gets 75% back
+        Platform gets 0.5% (full fee)
+  end note
+  note right of Disputed
+  Verification contested
+        All funds permanently locked (MVP)
+        Only creator or voting verifiers can dispute
+        Manual resolution out of scope
+  end note
+  note right of Cancelled
+  Challenge terminated early
+        If Created: Full refund
+        If Active: 98% refund (2% penalty)
+        Cannot cancel after PendingVerification
+  end note
+```
+
+**Create** → Stake SOL, set your goal, pick verifiers, define what counts as proof
+
+**Active** → Submit evidence (photos, data, whatever proves you did the thing)
+
+**Verification** → Your verifiers review and vote. Need enough approvals to win.
+
+**Outcome** → Win and get your stake back + bonus, or fail and verifiers split what you staked
+
+## The Instructions
+
+### `initialize_user`
+Creates your profile. Tracks stats across all your challenges.
+
+### `create_challenge`
+- Stake SOL (goes into escrow)
+- Set timeline (start/end dates, verification window)
+- Choose verifiers (people who'll review your evidence)
+- Define proof requirements (how many pieces of evidence needed, how many approvals)
+- Platform takes 0.5% fee upfront
+
+### `update_challenge_state`
+Admin-only. Moves challenges through states automatically based on time:
+- Created → Active when start time hits
+- Active → Failed if you didn't submit enough evidence by deadline
+- Active → Pending Verification if you submitted everything
+- Pending Verification → Completed after verification window (innocent until proven guilty)
+
+### `submit_evidence`
+Upload proof during the active period. IPFS hash + metadata. When you hit the required count, automatically moves to verification.
+
+### `verify_evidence`
+Verifiers vote approve/reject. Early finalization kicks in if the outcome becomes certain.
+
+### `claim_funds`
+After the dispute window closes:
+
+**If completed:**
+- You get: stake + 0.25% bonus
+- Platform gets: remaining 0.25%
+
+**If failed:**
+- Verifiers who rejected split 25% of your stake
+- You get: 75% back (not totally brutal)
+- Platform gets: 0.5%
+
+### `cancel_challenge`
+Bail before it's too late:
+- Cancel before start: full refund
+- Cancel during active: 2% penalty
+
+### `dispute_verification`
+48-hour window to challenge sketchy verifier decisions. Moves the challenge to Disputed status for manual review.
+
+## Game Theory
+
+**For you:** Putting real money down makes it harder to bail. You get 75% back if you fail, but you still lose 25% plus it's embarrassing. That's enough to keep you honest.
+
+**For verifiers:** They only make money if they catch fake evidence (they split your 25%). If they approve, they get nothing. So they actually have to review your proof instead of rubber-stamping everything.
+
+**Platform:** We take 0.5% to run things. If you succeed, we drop it to 0.25% and you get the other 0.25% back as a bonus.
+
+## Architecture
+
+```
+Challenge (PDA)
+    ├── Escrow (PDA) ─── holds stake + fee
+    ├── Evidence[0..n] (PDAs) ─── proof submissions
+    ├── Verification[verifier1..n] (PDAs) ─── votes
+    └── Dispute? (PDA) ─── optional dispute record
+
+User (PDA)
+    └── Stats: total challenges, completed, failed, total staked
+```
+
+## Instruction Flow
 
 ```mermaid
 flowchart TB
@@ -293,13 +449,8 @@ flowchart TB
     classDef startStyle fill:#9575CD,stroke:#5E35B1,stroke-width:3px,color:#fff
 ```
 
-## Instructions Overview
+## Constants
 
-1. **initialize_user** - Creates user profile to track challenge stats
-2. **create_challenge** - Challenger stakes SOL and defines challenge parameters
-3. **submit_evidence** - Challenger submits proof (IPFS hash) during challenge period
-4. **verify_evidence** - Designated verifiers vote to approve/reject evidence
-5. **finalize_challenge** - Distributes funds based on verification outcome
-6. **cancel_challenge** - Early exit with penalty (before completion)
-7. **dispute_verification** - Contest verification result within dispute window
-8. **claim_rewards** - Verifiers claim their share if challenge failed
+Check `src/constants.rs` for fees, time windows, and limits. Most are configurable except the admin pubkey (for state transitions).
+
+---
