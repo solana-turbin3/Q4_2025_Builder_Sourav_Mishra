@@ -453,4 +453,5 @@ flowchart TB
 
 Check `src/constants.rs` for fees, time windows, and limits. Most are configurable except the admin pubkey (for state transitions).
 
+Built on Anchor. Deployed on Solana. With ♥️ for Solana Turbin3 Q4-2025
 ---
